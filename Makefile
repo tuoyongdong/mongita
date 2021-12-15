@@ -3,6 +3,7 @@ build:
 	python3 setup.py sdist
 
 test:
+	command -v mongo || (echo "mongodb must be installed" && exit 1)
 	coverage run --concurrency=multiprocessing -m pytest tests -vx || exit 1
 	coverage combine
 	coverage report --include="mongita/*.py,mongitasync"

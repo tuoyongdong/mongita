@@ -6,6 +6,7 @@ import os
 import random
 import sys
 import shutil
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 import bson
@@ -111,15 +112,24 @@ TEST_DOCS = [
     },
 ]
 
-TEST_DIR = '/tmp/mongita_unittests'
+TEST_DIR = os.path.join(tempfile.gettempdir(), 'mongita_unittests')
 _MongitaClientDisk = functools.partial(MongitaClientDisk, TEST_DIR)
 LEN_TEST_DOCS = len(TEST_DOCS)
 CLIENTS = (MongitaClientMemory, _MongitaClientDisk)
 
 
-def remove_test_dir():
+def remove_test_dir(ignore=False):
+    import stat
     if os.path.exists(TEST_DIR):
+        if not os.access(TEST_DIR, os.W_OK):
+            os.chmod(TEST_DIR, stat.S_IWUSR)
         shutil.rmtree(TEST_DIR)
+        # except:
+        #     if ignore:
+        #         pass
+        #     else:
+        #         raise
+    assert not os.path.exists(TEST_DIR)
 
 
 def clear_pymongo():
@@ -128,7 +138,6 @@ def clear_pymongo():
 
 def setup_one(client_class):
     remove_test_dir()
-    assert not os.path.exists(TEST_DIR)
     client = client_class()
     coll = client.db.snake_hunter
     ior = coll.insert_one(TEST_DOCS[0])
@@ -138,7 +147,6 @@ def setup_one(client_class):
 
 def setup_many(client_class):
     remove_test_dir()
-    assert not os.path.exists(TEST_DIR)
     client = client_class()
     coll = client.db.snake_hunter
     imr = coll.insert_many(TEST_DOCS)
@@ -787,7 +795,6 @@ def test_no_leak(client_class):
 
     def fresh_coll():
         remove_test_dir()
-        assert not os.path.exists(TEST_DIR)
         client = client_class()
         coll = client.db.snake_hunter
         return client, coll
@@ -1859,10 +1866,7 @@ def test_close_memory():
 
 
 def test_secure_disk():
-    try:
-        shutil.rmtree(TEST_DIR)
-    except:
-        pass
+    remove_test_dir(ignore=True)
     client = _MongitaClientDisk()
     with pytest.raises(errors.InvalidName):
         client['../evil']['./very'].insert_one({'boo': 'boo'})
@@ -1910,7 +1914,7 @@ def test_close_disk():
     client.close()
 
     # remove the whole thing. It should get recreated
-    shutil.rmtree(TEST_DIR)
+    remove_test_dir()
     client = _MongitaClientDisk()
     assert not client.engine._cache
     assert client.db.snake_hunter.count_documents({}) == 0
@@ -1924,7 +1928,7 @@ def test_graceful_deletion():
     assert len(list(coll.find({}))) == LEN_TEST_DOCS
     client.close()
 
-    shutil.rmtree(TEST_DIR)
+    remove_test_dir()
     client = _MongitaClientDisk()
     assert list(client.list_databases()) == []
     coll = client.db.snake_hunter
