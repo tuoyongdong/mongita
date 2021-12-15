@@ -136,25 +136,42 @@ def clear_pymongo():
     pymongo.MongoClient().drop_database('mongita_test')
 
 
-def setup_one(client_class):
+def setup_one(client):
     remove_test_dir()
-    client = client_class()
+    if not isinstance(client, (MongitaClientDisk, MongitaClientMemory)):
+        client = client()
     coll = client.db.snake_hunter
     ior = coll.insert_one(TEST_DOCS[0])
     assert '_id' not in TEST_DOCS[0]
     return client, coll, ior
 
 
-def setup_many(client_class):
+def setup_many(client):
     remove_test_dir()
-    client = client_class()
+    if not isinstance(client, (MongitaClientDisk, MongitaClientMemory)):
+        client = client()
     coll = client.db.snake_hunter
     imr = coll.insert_many(TEST_DOCS)
     assert not any(['_id' in d for d in TEST_DOCS])
     return client, coll, imr
 
 
+import functools
+def decor(func):
+    @functools.wraps(func)
+    def _decor(client_class):
+        client = client_class()
+        try:
+            func(client)
+        except Exception as ex:
+            raise ex
+        finally:
+            client.close()
+            remove_test_dir()
+    return _decor
+
 @pytest.mark.parametrize("client_class", CLIENTS)
+@decor
 def test_insert_one(client_class):
     client, coll, ior = setup_one(client_class)
 
@@ -194,6 +211,7 @@ def test_insert_one(client_class):
 
 
 @pytest.mark.parametrize("client_class", CLIENTS)
+@decor
 def test_insert_many(client_class):
     client, coll, imr = setup_many(client_class)
     with pytest.raises(TypeError):
@@ -221,6 +239,7 @@ def test_insert_many(client_class):
 
 
 @pytest.mark.parametrize("client_class", CLIENTS)
+@decor
 def test_count_documents_one(client_class):
     client, coll, ior = setup_one(client_class)
     with pytest.raises(TypeError):
