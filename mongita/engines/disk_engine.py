@@ -223,16 +223,16 @@ class DiskEngine(Engine):
         return True
 
     def delete_dir(self, collection):
-        full_path = self._get_full_path(collection)
-        if not os.path.isdir(full_path):
-            return False
-        shutil.rmtree(full_path)
         self._cache.pop(collection, None)
         self._metadata.pop(collection, None)
         self._file_attrs.pop(collection, None)
         if collection in self._collection_fhs:
             self._collection_fhs[collection].close()
             self._collection_fhs.pop(collection, None)
+        full_path = self._get_full_path(collection)
+        if not os.path.isdir(full_path):
+            return False
+        shutil.rmtree(full_path)
         return True
 
     def list_ids(self, collection, limit=None):
